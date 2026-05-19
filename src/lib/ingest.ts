@@ -1,4 +1,7 @@
 import { readFile, writeFile, listDirectory } from "@/commands/fs"
+import { parseFrameworkConfig } from "@/lib/schema-loader"
+import { detectSourceType, type SourceType } from "@/lib/source-type"
+import { applyStatusDerivation } from "@/lib/compliance-post-ingest"
 import { streamChat } from "@/lib/llm-client"
 import type { LlmConfig } from "@/stores/wiki-store"
 import { useWikiStore } from "@/stores/wiki-store"
@@ -316,13 +319,16 @@ async function autoIngestImpl(
     filesWritten: [],
   })
 
-  const [sourceContent, schema, purpose, index, overview] = await Promise.all([
+  const [sourceContent, schema, purpose, index, overview, frameworkRaw] = await Promise.all([
     tryReadFile(sp),
     tryReadFile(`${pp}/schema.md`),
     tryReadFile(`${pp}/purpose.md`),
     tryReadFile(`${pp}/wiki/index.md`),
     tryReadFile(`${pp}/wiki/overview.md`),
+    tryReadFile(`${pp}/schema/framework.md`),
   ])
+  const frameworkConfig = parseFrameworkConfig(frameworkRaw)
+  const sourceType = detectSourceType(sp)
 
   // ── Cache check: skip re-ingest if source content hasn't changed ──
   //
@@ -543,7 +549,7 @@ async function autoIngestImpl(
   await streamChat(
     llmConfig,
     [
-      { role: "system", content: buildAnalysisPrompt(purpose, index, truncatedContent) },
+      { role: "system", content: buildAnalysisPrompt(purpose, index, truncatedContent, sourceType) },
       { role: "user", content: `Analyze this source document:\n\n**File:** ${fileName}${folderContext ? `\n**Folder context:** ${folderContext}` : ""}\n\n---\n\n${truncatedContent}` },
     ],
     {
@@ -574,7 +580,7 @@ async function autoIngestImpl(
   await streamChat(
     llmConfig,
     [
-      { role: "system", content: buildGenerationPrompt(schema, purpose, index, fileName, overview, truncatedContent) },
+      { role: "system", content: buildGenerationPrompt(schema, purpose, index, fileName, overview, truncatedContent, sourceType) },
       {
         role: "user",
         content: [
@@ -625,6 +631,20 @@ async function autoIngestImpl(
     fileName,
     signal,
   )
+
+  // ── Post-ingest: derive compliance page status ──────────────────
+  if (sourceType === "regulation" || sourceType === "compliance-docs") {
+    for (const wPath of writtenPaths) {
+      if (wPath.startsWith("wiki/compliance/")) {
+        try {
+          const full = `${pp}/${wPath}`
+          const page = await readFile(full)
+          const updated = applyStatusDerivation(page, frameworkConfig.complianceExtended)
+          if (updated !== page) await writeFile(full, updated)
+        } catch { /* non-critical */ }
+      }
+    }
+  }
 
   // Surface parser / writer warnings to the activity panel so users
   // don't have to open devtools to find out a block was dropped.
@@ -975,12 +995,24 @@ function parseReviewBlocks(
  * Step 1 prompt: AI reads the source and produces a structured analysis.
  * This is the "discussion" step — the AI reasons about the source before writing wiki pages.
  */
-export function buildAnalysisPrompt(purpose: string, index: string, sourceContent: string = ""): string {
+export function buildAnalysisPrompt(purpose: string, index: string, sourceContent: string = "", sourceType: SourceType = "general"): string {
   return [
     "You are an expert research analyst. Read the source document and produce a structured analysis.",
     "Do not output chain-of-thought, hidden reasoning, or a thinking transcript. Reason internally and write only the concise final analysis.",
     "",
     languageRule(sourceContent),
+    "",
+    sourceType !== "general"
+      ? `## Source Type\nThis source is from "${sourceType}/".\n${
+          sourceType === "regulation"
+            ? "Focus on identifying specific obligations, requirements, and structural references (article/paragraph/point)."
+            : sourceType === "compliance-docs"
+              ? "Focus on identifying which regulatory requirements this document addresses and coverage degree."
+              : sourceType === "external"
+                ? "Focus on the official status of this document and impact on existing compliance tracking."
+                : ""
+        }`
+      : "",
     "",
     "Your analysis should cover:",
     "",
@@ -1026,7 +1058,7 @@ export function buildAnalysisPrompt(purpose: string, index: string, sourceConten
 /**
  * Step 2 prompt: AI takes its own analysis and generates wiki files + review items.
  */
-export function buildGenerationPrompt(schema: string, purpose: string, index: string, sourceFileName: string, overview?: string, sourceContent: string = ""): string {
+export function buildGenerationPrompt(schema: string, purpose: string, index: string, sourceFileName: string, overview?: string, sourceContent: string = "", sourceType: SourceType = "general"): string {
   // Use original filename (without extension) as the source summary page name
   const sourceBaseName = sourceFileName.replace(/\.[^.]+$/, "")
 
@@ -1121,6 +1153,25 @@ export function buildGenerationPrompt(schema: string, purpose: string, index: st
     "(keyword-rich, specific, suitable for a search engine — NOT titles or sentences). Example:",
     "  SEARCH: automated technical debt detection AI generated code | software quality metrics LLM code generation | static analysis tools agentic software development",
     "",
+    sourceType === "regulation"
+      ? [
+          "## COMPLIANCE ENGINE: Regulation Source",
+          "Generate TWO types of pages:",
+          "1. Requirement pages in wiki/requirements/ (type: requirement) with id, title_primary, title_secondary, source_version, item keys in requires list",
+          "2. Initial compliance pages in wiki/compliance/ (type: compliance) with maps_to, item_statuses (all non-compliant), DO NOT set status field",
+          "item_statuses keys use short notation from the framework schema (e.g. '9(2)', '9(5)').",
+        ].join("\n")
+      : sourceType === "compliance-docs"
+        ? [
+            "## COMPLIANCE ENGINE: Compliance Document",
+            "Update existing wiki/compliance/ pages:",
+            "- Set item_statuses for covered items to compliant or partial",
+            "- Add document to documents list",
+            "- DO NOT set the status field (system derives it)",
+          ].join("\n")
+        : sourceType === "external"
+          ? "## COMPLIANCE ENGINE: External Source\nEvaluate status, generate REVIEW blocks for affected pages."
+          : "",
     purpose ? `## Wiki Purpose\n${purpose}` : "",
     schema ? `## Wiki Schema\n${schema}` : "",
     index ? `## Current Wiki Index (preserve all existing entries, add new ones)\n${index}` : "",
