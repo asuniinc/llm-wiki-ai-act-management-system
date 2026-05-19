@@ -1,5 +1,5 @@
 import { readFile, writeFile, listDirectory } from "@/commands/fs"
-import { loadSchema, type FrameworkConfig } from "@/lib/schema-loader"
+import { parseFrameworkConfig } from "@/lib/schema-loader"
 import { detectSourceType, type SourceType } from "@/lib/source-type"
 import { applyStatusDerivation } from "@/lib/compliance-post-ingest"
 import { streamChat } from "@/lib/llm-client"
@@ -319,15 +319,15 @@ async function autoIngestImpl(
     filesWritten: [],
   })
 
-  const [sourceContent, schemaResult, purpose, index, overview] = await Promise.all([
+  const [sourceContent, schema, purpose, index, overview, frameworkRaw] = await Promise.all([
     tryReadFile(sp),
-    loadSchema(pp),
+    tryReadFile(`${pp}/schema.md`),
     tryReadFile(`${pp}/purpose.md`),
     tryReadFile(`${pp}/wiki/index.md`),
     tryReadFile(`${pp}/wiki/overview.md`),
+    tryReadFile(`${pp}/schema/framework.md`),
   ])
-  const schema = schemaResult.merged
-  const frameworkConfig = schemaResult.frameworkConfig
+  const frameworkConfig = parseFrameworkConfig(frameworkRaw)
   const sourceType = detectSourceType(sp)
 
   // ── Cache check: skip re-ingest if source content hasn't changed ──

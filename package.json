@@ -11,7 +11,8 @@
     "test": "npm run test:mocks && npm run test:llm",
     "test:mocks": "vitest run --exclude='**/*.real-llm.test.ts'",
     "test:llm": "vitest run real-llm --no-file-parallelism --reporter=verbose",
-    "tauri": "tauri"
+    "tauri": "npm run schema:dump && tauri",
+    "schema:dump": "node scripts/dump-schema.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
