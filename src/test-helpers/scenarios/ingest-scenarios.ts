@@ -20,6 +20,93 @@ import type { IngestScenario } from "./types"
  * cares about the delimited blocks.
  */
 
+const AI_ACT_PURPOSE = `# Project Purpose — EU AI Act Compliance Management
+
+## Goal
+
+EU AI Act（高リスクAIシステム Chapter 3, Annex III (4) 雇用・労務）への
+適合状況を構造的に管理し、必要な文書の洗い出しと対応状況の可視化を行う。
+
+## Scope
+
+- 対象規制: Regulation (EU) 2024/1689
+- 対象カテゴリ: Annex III (4) — 雇用、労務管理
+- 対象条文: 第6条以降（高リスクAIシステムの義務）
+`
+
+const AI_ACT_SCHEMA = `# Compliance Wiki Engine — Common Schema
+
+## Page Types
+
+\`\`\`yaml
+page_types:
+  requirement:
+    description: "規制/規格の要求事項を構造化したページ"
+  compliance:
+    description: "要求事項に対する自社の適合状況ページ"
+\`\`\`
+
+## Status Models
+
+\`\`\`yaml
+status_models:
+  compliance:
+    - compliant
+    - partial
+    - non-compliant
+    - not-applicable
+\`\`\`
+
+---
+
+# EU AI Act — Framework Schema
+
+## Source Languages
+
+\`\`\`yaml
+source_languages:
+  primary: "en"
+  secondary: ["ja"]
+\`\`\`
+
+## compliance_extended
+
+\`\`\`yaml
+compliance_extended:
+  - value: blocked
+    maps_to_base: partial
+\`\`\`
+`
+
+const AI_ACT_FRAMEWORK = `# EU AI Act — Framework Schema
+
+## Source Languages
+
+\`\`\`yaml
+source_languages:
+  primary: "en"
+  secondary: ["ja"]
+\`\`\`
+
+## compliance_extended
+
+\`\`\`yaml
+compliance_extended:
+  - value: blocked
+    maps_to_base: partial
+\`\`\`
+
+## Ingest Overrides
+
+### regulation
+
+\`\`\`
+EU AI Act の条文を読み、条・項単位で以下を抽出せよ：
+- 義務の主体（provider / deployer / importer 等）
+- 具体的な義務・要件の内容
+\`\`\`
+`
+
 const BASIC_PURPOSE = `# Purpose
 
 This wiki tracks deep-learning research concepts.
@@ -217,7 +304,188 @@ export const ingestScenarios: IngestScenario[] = [
     },
   },
 
-  // 4. chinese-source — Chinese content flows through to Chinese wiki pages
+  // 4. ai-act-article-9 — regulation source generates requirement + compliance pages
+  {
+    name: "ai-act-article-9",
+    description:
+      "EU AI Act Article 9 regulation source is ingested. The compliance engine " +
+      "must generate requirement pages in wiki/requirements/ and initial compliance " +
+      "pages in wiki/compliance/ with item_statuses set to non-compliant. " +
+      "Post-ingest status derivation sets the compliance page status to non-compliant.",
+    initialWiki: {
+      "purpose.md": AI_ACT_PURPOSE,
+      "schema.md": AI_ACT_SCHEMA,
+      "schema/framework.md": AI_ACT_FRAMEWORK,
+      "wiki/index.md": "# Wiki Index\n\n## Requirements\n\n## Compliance\n",
+    },
+    source: {
+      path: "raw/sources/regulation/primary/ai-act-article-9-sample.md",
+      content: [
+        "# Article 9 — Risk management system",
+        "",
+        "> Regulation (EU) 2024/1689, OJ L 2024/1689, 2024-07-12",
+        "",
+        "## Article 9(1)",
+        "",
+        "A risk management system shall be established, implemented, documented and maintained in relation to high-risk AI systems.",
+        "",
+        "## Article 9(2) — Risk identification and analysis",
+        "",
+        "The risk management system shall include the identification and analysis of the known and reasonably foreseeable risks that the high-risk AI system can pose to health, safety or fundamental rights.",
+        "",
+        "## Article 9(5) — Residual risk evaluation",
+        "",
+        "High-risk AI systems shall be tested for the purpose of identifying the most appropriate and targeted risk management measures.",
+      ].join("\n"),
+    },
+    analysisResponse: [
+      "## Key Concepts",
+      "- Risk management system: mandatory framework for high-risk AI systems",
+      "- Risk identification and analysis: obligation under Article 9(2)",
+      "- Residual risk evaluation: testing obligation under Article 9(5)",
+      "",
+      "## Main Arguments & Findings",
+      "- Provider must establish, implement, document and maintain a risk management system",
+      "- System must identify known and foreseeable risks to health, safety, fundamental rights",
+      "- Testing required to identify appropriate risk management measures",
+      "",
+      "## Recommendations",
+      "- Create wiki/requirements/article-9.md for the requirement page",
+      "- Create wiki/compliance/compliance-article-9.md for compliance tracking",
+    ].join("\n"),
+    generationResponse: [
+      "---FILE: wiki/requirements/article-9.md---",
+      "---",
+      "type: requirement",
+      "id: article-9",
+      "title_primary: Risk management system",
+      "title_secondary: リスク管理システム",
+      "source_version: \"Regulation (EU) 2024/1689\"",
+      "requires:",
+      "  - \"9(1)\"",
+      "  - \"9(2)\"",
+      "  - \"9(5)\"",
+      "sources: [ai-act-article-9-sample.md]",
+      "created: 2026-05-19",
+      "updated: 2026-05-19",
+      "tags: [risk-management, high-risk-ai]",
+      "related: [compliance-article-9]",
+      "---",
+      "",
+      "# Article 9 — Risk management system",
+      "",
+      "## Overview",
+      "",
+      "Article 9 establishes the obligation for providers of high-risk AI systems to implement a risk management system.",
+      "",
+      "## Requirements",
+      "",
+      "### 9(1) — Establishment of risk management system",
+      "A risk management system shall be established, implemented, documented and maintained.",
+      "",
+      "### 9(2) — Risk identification and analysis",
+      "The system shall include identification and analysis of known and foreseeable risks.",
+      "",
+      "### 9(5) — Residual risk evaluation",
+      "High-risk AI systems shall be tested to identify appropriate risk management measures.",
+      "---END FILE---",
+      "",
+      "---FILE: wiki/compliance/compliance-article-9.md---",
+      "---",
+      "type: compliance",
+      "maps_to: article-9",
+      "owner: \"\"",
+      "last_reviewed: 2026-05-19",
+      "item_statuses:",
+      "  \"9(1)\": non-compliant",
+      "  \"9(2)\": non-compliant",
+      "  \"9(5)\": non-compliant",
+      "documents: []",
+      "sources: [ai-act-article-9-sample.md]",
+      "created: 2026-05-19",
+      "updated: 2026-05-19",
+      "tags: [risk-management, compliance]",
+      "related: [article-9]",
+      "---",
+      "",
+      "# Compliance — Article 9 Risk management system",
+      "",
+      "## Status Summary",
+      "",
+      "All items are currently non-compliant. Risk management system documentation needs to be established.",
+      "",
+      "## Next Actions",
+      "",
+      "1. Establish risk management system framework",
+      "2. Document risk identification and analysis procedures",
+      "3. Plan testing for residual risk evaluation",
+      "---END FILE---",
+      "",
+      "---FILE: wiki/sources/ai-act-article-9-sample.md---",
+      "---",
+      "type: source",
+      "title: \"Source: ai-act-article-9-sample.md\"",
+      "sources: [ai-act-article-9-sample.md]",
+      "created: 2026-05-19",
+      "updated: 2026-05-19",
+      "tags: [eu-ai-act, regulation]",
+      "related: [article-9, compliance-article-9]",
+      "---",
+      "",
+      "# Source: ai-act-article-9-sample.md",
+      "",
+      "EU AI Act Article 9 defines the risk management system requirements for high-risk AI systems.",
+      "---END FILE---",
+      "",
+      "---FILE: wiki/index.md---",
+      "---",
+      "type: overview",
+      "title: Wiki Index",
+      "---",
+      "",
+      "# Wiki Index",
+      "",
+      "## Requirements",
+      "- [[article-9]] — Risk management system (Article 9)",
+      "",
+      "## Compliance",
+      "- [[compliance-article-9]] — Compliance tracking for Article 9",
+      "",
+      "## Sources",
+      "- [[ai-act-article-9-sample]] — EU AI Act Article 9 source",
+      "---END FILE---",
+    ].join("\n"),
+    expected: {
+      writtenPaths: [
+        "wiki/requirements/article-9.md",
+        "wiki/compliance/compliance-article-9.md",
+        "wiki/sources/ai-act-article-9-sample.md",
+        "wiki/index.md",
+      ],
+      fileContains: {
+        "wiki/requirements/article-9.md": [
+          "type: requirement",
+          "id: article-9",
+          "title_primary: Risk management system",
+          "9(1)",
+          "9(2)",
+          "9(5)",
+        ],
+        "wiki/compliance/compliance-article-9.md": [
+          "type: compliance",
+          "maps_to: article-9",
+          "non-compliant",
+        ],
+        "wiki/sources/ai-act-article-9-sample.md": [
+          "type: source",
+          "ai-act-article-9-sample.md",
+        ],
+      },
+      reviewsCreated: [],
+    },
+  },
+
+  // 5. chinese-source — Chinese content flows through to Chinese wiki pages
   {
     name: "chinese-source",
     description:

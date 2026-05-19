@@ -47,6 +47,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Wiki project directories (created at runtime via the app)
+Demo/
+ai-act-wiki/
+wiki/
+.llm-wiki/
+
 # Brainstorm assets (not tracked in source control)
 .superpowers/
 .claude/

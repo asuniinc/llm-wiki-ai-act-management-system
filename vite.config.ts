@@ -39,8 +39,11 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell vite to ignore watching `src-tauri` and wiki project runtime dirs
+      // (.llm-wiki contains file-snapshot.json / file-change-queue.json that
+      //  the Rust file-sync watcher writes to — without this ignore, chokidar
+      //  picks up the writes and Vite triggers a full page reload loop)
+      ignored: ["**/src-tauri/**", "**/.llm-wiki/**"],
     },
   },
 
